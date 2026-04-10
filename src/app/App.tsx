@@ -12,6 +12,7 @@ import {
   BadgeCheck,
   Star,
   Camera,
+  Pill,
 } from "lucide-react";
 
 export default function App() {
@@ -135,11 +136,11 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       {/* Hero Section */}
       <motion.section
         style={{ opacity: heroOpacity, scale: heroScale }}
-        className="relative min-h-screen flex items-center justify-center overflow-hidden bg-slate-50"
+        className="relative min-h-screen flex flex-col overflow-hidden bg-slate-50"
       >
         {/* Premium mesh gradient background */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-cyan-100/80 via-slate-50 to-teal-100/50" />
@@ -163,28 +164,34 @@ export default function App() {
           transition={{ duration: 8, repeat: Infinity, delay: 1 }}
         />
 
-        <div className="relative z-10 container mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+        {/* Brand Header */}
+        <header className="relative z-50 pt-4 md:pt-6 pb-0 pointer-events-none flex-shrink-0">
+          <div className="container mx-auto px-6 lg:px-12">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-3 md:gap-4"
+            >
+              <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                <Pill className="w-5 h-5 md:w-7 md:h-7 text-white" />
+              </div>
+              <span className="text-3xl md:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-cyan-800 to-teal-700 tracking-tight">SmartMeds</span>
+            </motion.div>
+          </div>
+        </header>
+
+        <div className="relative z-10 container mx-auto px-6 lg:px-12 flex-1 flex flex-col justify-start pt-2 md:pt-4 pb-12">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center w-full">
             {/* Left: Content */}
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
             >
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 backdrop-blur-md border border-cyan-100 shadow-sm text-cyan-800 text-sm font-medium mb-8"
-              >
-                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-                Affordable Healthcare for Everyone
-              </motion.div>
-
-              <h1 className="text-6xl md:text-7xl font-extrabold mb-6 leading-[1.1] tracking-tight text-slate-900">
+              <h1 className="text-5xl md:text-6xl lg:text-[4.5rem] font-extrabold mb-6 leading-[1.05] tracking-tighter text-slate-900 mt-0">
                 Affordable Medicine
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 to-teal-500">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 via-teal-500 to-emerald-500 pb-2 inline-block drop-shadow-sm">
                   Intelligence Platform
                 </span>
               </h1>
@@ -223,6 +230,18 @@ export default function App() {
                     </motion.svg>
                   </motion.div>
                 </motion.button>
+
+                {/* Trust Badges */}
+                <div className="flex items-center gap-4 mt-6 pl-2">
+                  <div className="flex items-center gap-1.5 text-slate-700 bg-white/60 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200 shadow-sm transition-all hover:shadow-md">
+                    <BadgeCheck className="w-4 h-4 text-emerald-600" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider">CDSCO Verified</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-700 bg-white/60 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200 shadow-sm transition-all hover:shadow-md">
+                    <BadgeCheck className="w-4 h-4 text-cyan-600" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider">FSSAI Compliant</span>
+                  </div>
+                </div>
               </motion.div>
 
               {/* Stats */}
@@ -290,7 +309,7 @@ export default function App() {
       <section className="py-32 bg-slate-50 relative overflow-hidden">
         {/* Decorative faint grid */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
-        
+
         <div className="container mx-auto px-6 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -397,7 +416,7 @@ export default function App() {
       {/* CTA Section */}
       <section className="py-32 bg-slate-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-900/40 via-slate-900 to-slate-900" />
-        
+
         <motion.div
           className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full bg-cyan-500/10 blur-[100px]"
           animate={{
@@ -429,6 +448,18 @@ export default function App() {
               >
                 Enter Platform
               </motion.button>
+            </div>
+
+            {/* Trust Badges for bottom CTA */}
+            <div className="flex items-center justify-center gap-6 mt-8">
+              <div className="flex items-center gap-2 text-cyan-100/90 bg-white/5 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 transition-colors hover:bg-white/10">
+                <BadgeCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-[11px] font-bold uppercase tracking-wider">CDSCO Verified</span>
+              </div>
+              <div className="flex items-center gap-2 text-cyan-100/90 bg-white/5 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 transition-colors hover:bg-white/10">
+                <BadgeCheck className="w-4 h-4 text-cyan-400" />
+                <span className="text-[11px] font-bold uppercase tracking-wider">FSSAI Compliant</span>
+              </div>
             </div>
           </motion.div>
         </div>

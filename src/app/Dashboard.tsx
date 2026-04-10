@@ -86,7 +86,7 @@ export default function Dashboard() {
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.2 }}
               >
-                <h1 className="text-white text-lg leading-tight">MediSave</h1>
+                <h1 className="text-white text-lg leading-tight">SmartMeds</h1>
                 <p className="text-cyan-200 text-xs">Smart Medicine Platform</p>
               </motion.div>
             )}
