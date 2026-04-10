@@ -6,4 +6,5 @@ httpx
 python-dotenv
 google-generativeai>=0.7.0
 spacy
+gunicorn
 # After install run: python -m spacy download en_core_web_sm
