@@ -28,10 +28,10 @@ export function InfoCard({ icon: Icon, title, description, badge, index }: InfoC
       className="relative group"
       style={{ transformStyle: "preserve-3d" }}
     >
-      <div className="relative bg-white rounded-xl p-8 shadow-md hover:shadow-xl transition-all duration-300 border border-border overflow-hidden h-full">
+      <div className="relative bg-white/60 backdrop-blur-md rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(6,182,212,0.1)] transition-all duration-300 border border-white/50 overflow-hidden h-full">
         {badge && (
           <div className="absolute top-6 right-6">
-            <span className="px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs">
+            <span className="px-4 py-1.5 rounded-full bg-cyan-100/50 backdrop-blur-sm text-cyan-700 font-bold text-xs border border-cyan-200/50">
               {badge}
             </span>
           </div>
@@ -41,8 +41,8 @@ export function InfoCard({ icon: Icon, title, description, badge, index }: InfoC
           <Icon className="w-7 h-7 text-white" />
         </div>
 
-        <h3 className="text-xl mb-3">{title}</h3>
-        <p className="text-muted-foreground leading-relaxed">{description}</p>
+        <h3 className="text-xl font-bold text-slate-800 mb-3">{title}</h3>
+        <p className="text-slate-600 font-medium leading-relaxed">{description}</p>
 
         {/* Hover gradient effect */}
         <motion.div

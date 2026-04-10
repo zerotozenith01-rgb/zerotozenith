@@ -39,8 +39,8 @@ export function FeatureSection({
           <Icon className="w-8 h-8 text-white" />
         </motion.div>
 
-        <h2 className="text-3xl mb-4">{title}</h2>
-        <p className="text-lg text-muted-foreground mb-6 leading-relaxed">{description}</p>
+        <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-4 tracking-tight">{title}</h2>
+        <p className="text-lg text-slate-600 font-medium mb-8 leading-relaxed">{description}</p>
 
         <ul className="space-y-3">
           {details.map((detail, idx) => (
@@ -53,7 +53,7 @@ export function FeatureSection({
               className="flex items-start gap-3"
             >
               <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-2 flex-shrink-0" />
-              <span className="text-muted-foreground leading-relaxed">{detail}</span>
+              <span className="text-slate-600 font-medium leading-relaxed">{detail}</span>
             </motion.li>
           ))}
         </ul>
@@ -67,9 +67,9 @@ export function FeatureSection({
         transition={{ delay: 0.3 + index * 0.1 }}
         className={`relative ${reverse ? "lg:order-1" : ""}`}
       >
-        <div className="relative bg-gradient-to-br from-cyan-50 to-teal-50 rounded-2xl p-8 border border-cyan-100 shadow-xl">
-          <div className="aspect-video bg-white rounded-xl shadow-inner flex items-center justify-center border border-cyan-100/50">
-            <Icon className="w-24 h-24 text-cyan-200" />
+        <div className="relative bg-gradient-to-br from-cyan-50/50 to-teal-50/50 backdrop-blur-xl rounded-3xl p-8 border border-white shadow-[0_20px_60px_-15px_rgba(6,182,212,0.2)]">
+          <div className="aspect-video bg-white/80 backdrop-blur-sm rounded-2xl shadow-inner flex items-center justify-center border border-white">
+            <Icon className="w-24 h-24 text-cyan-100 drop-shadow-sm" />
           </div>
 
           {/* Floating decoration */}
