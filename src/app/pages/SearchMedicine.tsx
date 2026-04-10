@@ -8,7 +8,6 @@ import {
   Filter,
   CheckCircle2,
   TrendingDown,
-  MapPin,
   AlertCircle,
   ArrowRight,
   Pill,
@@ -19,6 +18,11 @@ import {
   Sparkles,
   Loader2,
 } from "lucide-react";
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+// BUG FIX 1: Moved API_BASE inside module scope (not a top-level await fetch),
+//            so it's just a string constant — no runtime crash on import.
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,7 +82,8 @@ const QUICK_SUGGESTIONS = [
   "Paracetamol", "Azithromycin", "Pantoprazole", "Cetirizine", "Metformin",
 ];
 
-// Debounce hook
+// ─── Debounce hook ────────────────────────────────────────────────────────────
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -88,13 +93,31 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
+// ─── Helper: highlight matching substring ─────────────────────────────────────
+// BUG FIX 5: Guard for undefined/empty text so it never throws.
+function highlightMatch(text: string | undefined, query: string) {
+  if (!text) return null;
+  if (!query) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="text-cyan-600 font-medium">
+        {text.slice(idx, idx + query.length)}
+      </span>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SearchMedicine() {
   const [searchParams] = useSearchParams();
 
   // Search state
-  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [results, setResults] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState(false);
@@ -125,10 +148,7 @@ export default function SearchMedicine() {
   // ── Close dropdown on outside click ──────────────────────────────────────
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
       }
     };
@@ -147,12 +167,14 @@ export default function SearchMedicine() {
     let cancelled = false;
     setSuggestLoading(true);
 
-    fetch(`/api/medicines/smart-search?q=${encodeURIComponent(debouncedQuery.trim())}`)
+    // BUG FIX 3: Use API_BASE consistently for all fetch calls.
+    fetch(`${API_BASE}/api/medicines/smart-search?q=${encodeURIComponent(debouncedQuery.trim())}`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        setSuggestions(data.suggestions ?? []);
-        setDropdownOpen((data.suggestions ?? []).length > 0);
+        const list: Suggestion[] = data.suggestions ?? [];
+        setSuggestions(list);
+        setDropdownOpen(list.length > 0);
         setHighlightedIndex(-1);
       })
       .catch(() => {
@@ -165,20 +187,17 @@ export default function SearchMedicine() {
     return () => { cancelled = true; };
   }, [debouncedQuery]);
 
-  // ── On mount: run search if ?q= param present ─────────────────────────────
-  useEffect(() => {
-    const q = searchParams.get("q");
-    if (q) {
-      setQuery(q);
-      handleSearch(q);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Full search (standard ilike) ─────────────────────────────────────────
-  const handleSearch = useCallback(async (searchQuery?: string) => {
-    const q = searchQuery ?? query;
-    if (!q.trim() && selectedCategory === "All") return;
+  // ── Full search ───────────────────────────────────────────────────────────
+  // BUG FIX 2: Removed `query` and `selectedCategory` from the closure entirely.
+  //            Both are passed in as explicit parameters so there are no stale
+  //            closure values regardless of when the callback was created.
+  //            The `useCallback` has an empty deps array because all inputs are
+  //            now arguments — no captured state.
+  const handleSearch = useCallback(async (
+    searchQuery: string,
+    category: string,
+  ) => {
+    if (!searchQuery.trim() && category === "All") return;
 
     setDropdownOpen(false);
     setLoading(true);
@@ -189,12 +208,12 @@ export default function SearchMedicine() {
 
     try {
       const params = new URLSearchParams();
-      if (q.trim()) params.set("q", q.trim());
-      if (selectedCategory !== "All") params.set("category", selectedCategory);
+      if (searchQuery.trim()) params.set("q", searchQuery.trim());
+      if (category !== "All") params.set("category", category);
 
-      const res = await fetch(`/api/medicines/search?${params}`);
+      // BUG FIX 1 & 3: No top-level await, and API_BASE used consistently.
+      const res = await fetch(`${API_BASE}/api/medicines/search?${params}`);
 
-      // SAFETY CHECK: Prevent parsing if server crashed
       if (!res.ok) {
         console.error("Search failed:", await res.text());
         setResults([]);
@@ -209,44 +228,63 @@ export default function SearchMedicine() {
     } finally {
       setLoading(false);
     }
-  }, [query, selectedCategory]);
+  }, []); // stable — no captured state
 
-  // ── NLP search — parses natural language then searches ───────────────────
-  const handleNlpSearch = useCallback(async () => {
-    if (!query.trim()) return;
+  // ── NLP search ───────────────────────────────────────────────────────────
+  // BUG FIX 4: `handleNlpSearch` receives `q` as an explicit param so it
+  //            always uses the current input value, not a stale closure copy.
+  const handleNlpSearch = useCallback(async (q: string) => {
+    if (!q.trim()) return;
 
     setDropdownOpen(false);
     setLoading(true);
     setSearched(true);
     setSelectedMedicine(null);
     setAlternatives(null);
+    setParsedQuery(null);
 
     try {
       const res = await fetch(
-        `/api/medicines/nlp-search?q=${encodeURIComponent(query.trim())}`
+        `${API_BASE}/api/medicines/nlp-search?q=${encodeURIComponent(q.trim())}`,
       );
+      if (!res.ok) {
+        console.error("NLP search failed:", await res.text());
+        setResults([]);
+        return;
+      }
       const data = await res.json();
       setResults(data.medicines ?? []);
       setParsedQuery(data.parsed_query ?? null);
     } catch (err) {
       console.error(err);
+      setResults([]);
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, []);
+
+  // ── On mount: run search if ?q= param present ─────────────────────────────
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) {
+      setQuery(q);
+      handleSearch(q, "All");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Suggestion selected from dropdown ────────────────────────────────────
-  const handleSuggestionSelect = (suggestion: Suggestion) => {
+  const handleSuggestionSelect = useCallback((suggestion: Suggestion) => {
     setQuery(suggestion.brand_name);
     setDropdownOpen(false);
     setSuggestions([]);
-    handleSearch(suggestion.brand_name);
-  };
+    handleSearch(suggestion.brand_name, selectedCategory);
+  }, [handleSearch, selectedCategory]);
 
-  // ── Keyboard navigation inside dropdown ──────────────────────────────────
+  // ── Keyboard navigation ───────────────────────────────────────────────────
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!dropdownOpen || suggestions.length === 0) {
-      if (e.key === "Enter") handleSearch();
+      if (e.key === "Enter") handleSearch(query, selectedCategory);
       return;
     }
     if (e.key === "ArrowDown") {
@@ -260,7 +298,7 @@ export default function SearchMedicine() {
       if (highlightedIndex >= 0) {
         handleSuggestionSelect(suggestions[highlightedIndex]);
       } else {
-        handleSearch();
+        handleSearch(query, selectedCategory);
       }
     } else if (e.key === "Escape") {
       setDropdownOpen(false);
@@ -273,15 +311,12 @@ export default function SearchMedicine() {
     setSelectedMedicine(medicine);
     setAltLoading(true);
     try {
-      const res = await fetch(`/api/medicines/${medicine.id}/alternatives`);
-
-      // SAFETY CHECK: Stop the "Unexpected token <" error
+      const res = await fetch(`${API_BASE}/api/medicines/${medicine.id}/alternatives`);
       if (!res.ok) {
         console.error("Alternatives fetch failed:", await res.text());
         setAlternatives(null);
         return;
       }
-
       const data = await res.json();
       setAlternatives(data);
     } catch (err) {
@@ -291,20 +326,22 @@ export default function SearchMedicine() {
     }
   };
 
-  // ── Prescription upload (mock) ────────────────────────────────────────────
+  // ── Prescription upload ───────────────────────────────────────────────────
   const handleUpload = async () => {
     setShowUploadModal(false);
     setLoading(true);
     setSearched(true);
     try {
-      const res = await fetch("/api/medicines/scan-prescription", { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/medicines/scan-prescription`, { method: "POST" });
+      if (!res.ok) {
+        console.error("Prescription scan failed:", await res.text());
+        return;
+      }
       const data = await res.json();
       if (data.detected_medicines?.length > 0) {
-        const name = data.detected_medicines[0].name;
+        const name: string = data.detected_medicines[0].name;
         setQuery(name);
-        const searchRes = await fetch(`/api/medicines/search?q=${name}`);
-        const searchData = await searchRes.json();
-        setResults(searchData.medicines ?? []);
+        handleSearch(name, "All");
       }
     } catch (err) {
       console.error(err);
@@ -375,7 +412,7 @@ export default function SearchMedicine() {
                     <motion.button
                       key={s.id}
                       onMouseDown={(e) => {
-                        e.preventDefault(); // prevent input blur before click fires
+                        e.preventDefault();
                         handleSuggestionSelect(s);
                       }}
                       onMouseEnter={() => setHighlightedIndex(i)}
@@ -383,23 +420,15 @@ export default function SearchMedicine() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.03 }}
                       className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors
-                        ${highlightedIndex === i
-                          ? "bg-cyan-50"
-                          : "hover:bg-gray-50"
-                        }`}
+                        ${highlightedIndex === i ? "bg-cyan-50" : "hover:bg-gray-50"}`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Pill className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                         <span className="text-sm text-gray-700 truncate">
-                          {/* Highlight matching portion */}
                           {highlightMatch(s.brand_name, query)}
                         </span>
                       </div>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${scoreBadgeClass(
-                          s.score
-                        )}`}
-                      >
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${scoreBadgeClass(s.score)}`}>
                         {s.score}%
                       </span>
                     </motion.button>
@@ -409,7 +438,6 @@ export default function SearchMedicine() {
             </AnimatePresence>
           </div>
 
-          {/* Spinner while fetching suggestions */}
           {suggestLoading && !dropdownOpen && (
             <Loader2 className="w-4 h-4 text-cyan-400 animate-spin flex-shrink-0" />
           )}
@@ -455,12 +483,12 @@ export default function SearchMedicine() {
             Scan
           </motion.button>
 
-          {/* NLP Smart Search */}
           <motion.button
             type="button"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            onClick={handleNlpSearch}
+            // BUG FIX 4: Pass current `query` explicitly — no stale closure.
+            onClick={() => handleNlpSearch(query)}
             title="Describe your need in plain English — AI will extract the medicine name"
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors text-sm border border-violet-100"
           >
@@ -473,24 +501,20 @@ export default function SearchMedicine() {
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${showFilters
-                ? "bg-cyan-50 text-cyan-700"
-                : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${showFilters ? "bg-cyan-50 text-cyan-700" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
               }`}
           >
             <Filter className="w-4 h-4" />
             Filters
-            <ChevronDown
-              className={`w-3 h-3 transition-transform ${showFilters ? "rotate-180" : ""
-                }`}
-            />
+            <ChevronDown className={`w-3 h-3 transition-transform ${showFilters ? "rotate-180" : ""}`} />
           </motion.button>
 
           <motion.button
             type="button"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            onClick={() => handleSearch()}
+            // BUG FIX 2: Pass current state explicitly — no stale closure.
+            onClick={() => handleSearch(query, selectedCategory)}
             className="ml-auto px-8 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-md shadow-cyan-500/25 hover:shadow-lg hover:shadow-cyan-500/30 transition-all text-sm"
           >
             Search
@@ -514,7 +538,8 @@ export default function SearchMedicine() {
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setSelectedCategory(cat);
-                      if (cat !== "All" || query) handleSearch();
+                      // Always trigger a new search with the updated category.
+                      if (cat !== "All" || query) handleSearch(query, cat);
                     }}
                     className={`px-4 py-2 rounded-full text-sm transition-all ${selectedCategory === cat
                         ? "bg-cyan-500 text-white shadow-md"
@@ -567,13 +592,9 @@ export default function SearchMedicine() {
       {/* ── Results grid ── */}
       {!loading && searched && !selectedMedicine && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
-              Found{" "}
-              <span className="text-gray-800 font-medium">{results.length}</span>{" "}
-              medicines
-            </p>
-          </div>
+          <p className="text-sm text-gray-500">
+            Found <span className="text-gray-800 font-medium">{results.length}</span> medicines
+          </p>
 
           {results.length === 0 ? (
             <motion.div
@@ -583,9 +604,7 @@ export default function SearchMedicine() {
             >
               <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg text-gray-600 mb-2">No medicines found</h3>
-              <p className="text-sm text-gray-400">
-                Try a different search term or category
-              </p>
+              <p className="text-sm text-gray-400">Try a different search term or category</p>
             </motion.div>
           ) : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -602,9 +621,7 @@ export default function SearchMedicine() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0 pr-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-base text-gray-800 truncate">
-                          {medicine.brand_name}
-                        </h3>
+                        <h3 className="text-base text-gray-800 truncate">{medicine.brand_name}</h3>
                         {medicine.is_verified && (
                           <CheckCircle2 className="w-4 h-4 text-cyan-500 flex-shrink-0" />
                         )}
@@ -620,20 +637,19 @@ export default function SearchMedicine() {
                     <div className="flex items-start gap-2 mb-2">
                       <Pill className="w-4 h-4 text-cyan-500 mt-0.5 flex-shrink-0" />
                       <div className="flex flex-wrap gap-1.5">
-                        {medicine.salt_composition?.split(/[+,]/).map((salt, idx) => (
-                          salt.trim() && (
+                        {medicine.salt_composition?.split(/[+,]/).map((salt, idx) =>
+                          salt.trim() ? (
                             <span key={idx} className="px-2 py-1 bg-cyan-50 text-cyan-700 text-[11px] font-medium rounded-md border border-cyan-100">
                               {salt.trim()}
                             </span>
-                          )
-                        ))}
+                          ) : null
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Shield className="w-3.5 h-3.5 text-gray-400" />
                       <span className="text-gray-600">
-                        {medicine.dosage_form} • {medicine.strength} •{" "}
-                        {medicine.pack_size}
+                        {medicine.dosage_form} • {medicine.strength} • {medicine.pack_size}
                       </span>
                     </div>
                   </div>
@@ -673,13 +689,10 @@ export default function SearchMedicine() {
               <div>
                 <h2 className="text-xl text-gray-800">
                   Alternatives for{" "}
-                  <span className="text-cyan-600">
-                    {selectedMedicine.brand_name}
-                  </span>
+                  <span className="text-cyan-600">{selectedMedicine.brand_name}</span>
                 </h2>
                 <p className="text-sm text-gray-500">
-                  {selectedMedicine.salt_composition} •{" "}
-                  {selectedMedicine.strength}
+                  {selectedMedicine.salt_composition} • {selectedMedicine.strength}
                 </p>
               </div>
               <motion.button
@@ -735,27 +748,23 @@ export default function SearchMedicine() {
                             <p className="text-xs text-gray-500">{alt.manufacturer}</p>
                           </div>
                           <div className="flex flex-wrap gap-1 mb-3 pt-2 border-t border-gray-50/50">
-                            {alt.salt_composition?.split(/[+,]/).map((salt, idx) => (
-                              salt.trim() && (
+                            {alt.salt_composition?.split(/[+,]/).map((salt, idx) =>
+                              salt.trim() ? (
                                 <span key={idx} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-medium rounded border border-emerald-100/50">
                                   {salt.trim()}
                                 </span>
-                              )
-                            ))}
+                              ) : null
+                            )}
                           </div>
                           <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                             <div>
                               <span className="text-xl text-gray-800">₹{alt.price}</span>
-                              <span className="text-xs text-gray-500 ml-1">
-                                / {alt.pack_size}
-                              </span>
+                              <span className="text-xs text-gray-500 ml-1">/ {alt.pack_size}</span>
                             </div>
                             {alt.savings_percent > 0 && (
                               <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50">
                                 <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />
-                                <span className="text-xs text-emerald-700">
-                                  Save {alt.savings_percent}%
-                                </span>
+                                <span className="text-xs text-emerald-700">Save {alt.savings_percent}%</span>
                               </div>
                             )}
                           </div>
@@ -796,13 +805,13 @@ export default function SearchMedicine() {
                             <p className="text-xs text-gray-500">{alt.manufacturer}</p>
                           </div>
                           <div className="flex flex-wrap gap-1 mb-3 pt-2 border-t border-gray-50/50">
-                            {alt.salt_composition?.split(/[+,]/).map((salt, idx) => (
-                              salt.trim() && (
+                            {alt.salt_composition?.split(/[+,]/).map((salt, idx) =>
+                              salt.trim() ? (
                                 <span key={idx} className="px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-medium rounded border border-amber-100/50">
                                   {salt.trim()}
                                 </span>
-                              )
-                            ))}
+                              ) : null
+                            )}
                           </div>
                           <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                             <div>
@@ -811,9 +820,7 @@ export default function SearchMedicine() {
                             {alt.savings_percent > 0 && (
                               <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50">
                                 <TrendingDown className="w-3.5 h-3.5 text-amber-600" />
-                                <span className="text-xs text-amber-700">
-                                  Save {alt.savings_percent}%
-                                </span>
+                                <span className="text-xs text-amber-700">Save {alt.savings_percent}%</span>
                               </div>
                             )}
                           </div>
@@ -827,9 +834,7 @@ export default function SearchMedicine() {
                   alternatives.similar_matches.length === 0 && (
                     <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
                       <Pill className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg text-gray-600 mb-2">
-                        No alternatives found
-                      </h3>
+                      <h3 className="text-lg text-gray-600 mb-2">No alternatives found</h3>
                       <p className="text-sm text-gray-400">
                         This medicine has no registered alternatives in our database
                       </p>
@@ -860,17 +865,15 @@ export default function SearchMedicine() {
             >
               <h2 className="text-xl text-gray-800 mb-2">Upload Prescription</h2>
               <p className="text-sm text-gray-500 mb-6">
-                Upload a photo of your prescription or medicine package. Our
-                system will extract medicine information automatically.
+                Upload a photo of your prescription or medicine package. Our system will extract
+                medicine information automatically.
               </p>
               <div
                 className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-cyan-300 transition-colors cursor-pointer mb-6"
                 onClick={handleUpload}
               >
                 <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                <p className="text-sm text-gray-600 mb-1">
-                  Click to upload or drag & drop
-                </p>
+                <p className="text-sm text-gray-600 mb-1">Click to upload or drag & drop</p>
                 <p className="text-xs text-gray-400">PNG, JPG up to 10MB</p>
               </div>
               <div className="flex gap-3">
@@ -911,8 +914,8 @@ export default function SearchMedicine() {
           </motion.div>
           <h3 className="text-xl text-gray-600 mb-2">Search for Medicines</h3>
           <p className="text-gray-400 max-w-md mx-auto">
-            Type a medicine name and pick from the smart dropdown, or describe
-            your need and hit <strong>Smart Search</strong> to let AI extract it.
+            Type a medicine name and pick from the smart dropdown, or describe your need and hit{" "}
+            <strong>Smart Search</strong> to let AI extract it.
           </p>
 
           <div className="flex flex-wrap justify-center gap-2 mt-8">
@@ -923,7 +926,7 @@ export default function SearchMedicine() {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => {
                   setQuery(suggestion);
-                  handleSearch(suggestion);
+                  handleSearch(suggestion, "All");
                 }}
                 className="px-4 py-2 rounded-full bg-white border border-gray-200 text-sm text-gray-600 hover:border-cyan-300 hover:text-cyan-700 transition-colors shadow-sm"
               >
@@ -934,21 +937,5 @@ export default function SearchMedicine() {
         </motion.div>
       )}
     </motion.div>
-  );
-}
-
-// ─── Helper: highlight the typed substring inside a suggestion label ──────────
-function highlightMatch(text: string, query: string) {
-  if (!query) return <>{text}</>;
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <span className="text-cyan-600 font-medium">
-        {text.slice(idx, idx + query.length)}
-      </span>
-      {text.slice(idx + query.length)}
-    </>
   );
 }
