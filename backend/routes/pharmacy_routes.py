@@ -6,7 +6,9 @@ pharmacy_bp = Blueprint("pharmacy", __name__)
 @pharmacy_bp.route("/nearby")
 def nearby():
     medicine_id = request.args.get("medicine_id")
-    pharmacies = get_nearby_pharmacies(medicine_id)
+    user_lat = request.args.get("lat", type=float)
+    user_lng = request.args.get("lng", type=float)
+    pharmacies = get_nearby_pharmacies(medicine_id, user_lat, user_lng)
     return {"pharmacies": pharmacies}
 
 
