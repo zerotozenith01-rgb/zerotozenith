@@ -5,6 +5,8 @@ from routes.medicine_routes import medicine_bp
 from routes.pharmacy_routes import pharmacy_bp
 from routes.review_routes import review_bp
 from routes.stats_routes import stats_bp
+from routes.profile_routes import profile_bp
+from routes.auth_routes import auth_bp
 
 app = Flask(__name__)
 CORS(app)
@@ -13,6 +15,8 @@ app.register_blueprint(medicine_bp, url_prefix="/api/medicines")
 app.register_blueprint(pharmacy_bp, url_prefix="/api/pharmacies")
 app.register_blueprint(review_bp, url_prefix="/api/reviews")
 app.register_blueprint(stats_bp, url_prefix="/api")
+app.register_blueprint(profile_bp, url_prefix="/api/profile")
+app.register_blueprint(auth_bp, url_prefix="/api/auth")
 
 @app.route("/api/prices/compare", methods=["GET"])
 def prices_compare():

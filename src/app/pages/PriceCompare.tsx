@@ -364,11 +364,10 @@ export default function PriceCompare() {
                         <td className="px-4 py-3 text-gray-800">{pp.pharmacy_name}</td>
                         <td className="px-4 py-3 text-gray-500 text-xs">{pp.address}</td>
                         <td className="px-4 py-3 text-right">
-                          <span className={`font-medium ${
-                            pp.price === Math.min(...compareData.pharmacy_prices.map((p) => p.price))
+                          <span className={`font-medium ${pp.price === Math.min(...compareData.pharmacy_prices.map((p) => p.price))
                               ? "text-emerald-600"
                               : "text-gray-800"
-                          }`}>
+                            }`}>
                             ₹{pp.price}
                           </span>
                         </td>
@@ -416,13 +415,12 @@ export default function PriceCompare() {
                       <td className="px-4 py-3 text-right text-gray-800">₹{alt.price}</td>
                       <td className="px-4 py-3 text-right text-gray-600">₹{alt.price_per_unit}</td>
                       <td className="px-4 py-3 text-right">
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${
-                          alt.type === "original"
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${alt.type === "original"
                             ? "bg-red-50 text-red-700"
                             : alt.type === "generic"
-                            ? "bg-cyan-50 text-cyan-700"
-                            : "bg-gray-100 text-gray-600"
-                        }`}>
+                              ? "bg-cyan-50 text-cyan-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}>
                           {alt.type === "original" ? "Original" : alt.type === "generic" ? "Generic" : "Alternative"}
                         </span>
                       </td>

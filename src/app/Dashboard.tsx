@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
+import { useAuth } from "./AuthContext";
 import {
   LayoutDashboard,
   Search,
@@ -36,6 +37,12 @@ export default function Dashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   const isActive = (path: string, exact?: boolean) => {
     if (exact) return location.pathname === path;
@@ -137,7 +144,17 @@ export default function Dashboard() {
         </nav>
 
         {/* Sidebar footer */}
-        <div className="px-3 py-4 border-t border-white/10">
+        <div className="px-3 py-4 border-t border-white/10 space-y-1">
+          {user && (
+            <motion.button
+              onClick={handleLogout}
+              whileHover={{ x: 4 }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-red-200 hover:bg-red-500/20 hover:text-white transition-all"
+            >
+              <LogOut className="w-5 h-5 flex-shrink-0" />
+              {!sidebarCollapsed && <span className="text-sm">Sign Out</span>}
+            </motion.button>
+          )}
           <motion.button
             onClick={() => navigate("/")}
             whileHover={{ x: 4 }}
@@ -189,30 +206,43 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="relative p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
-            >
-              <Bell className="w-5 h-5 text-gray-600" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-500" />
-            </motion.button>
+            <div className="flex items-center gap-3">
+              {user ? (
+                <>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="relative p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+                  >
+                    <Bell className="w-5 h-5 text-gray-600" />
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-500" />
+                  </motion.button>
 
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              onClick={() => navigate("/dashboard/profile")}
-              className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
-                <span className="text-white text-sm">A</span>
-              </div>
-              <div className="hidden sm:block text-left">
-                <p className="text-sm text-gray-800">Aditya</p>
-                <p className="text-xs text-gray-500">Premium User</p>
-              </div>
-            </motion.button>
-          </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    onClick={() => navigate("/dashboard/profile")}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
+                      <span className="text-white text-sm">{user.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="hidden sm:block text-left">
+                      <p className="text-sm text-gray-800">{user.name}</p>
+                      <p className="text-xs text-gray-500">{user.role === "vendor" ? "Vendor" : "Premium User"}</p>
+                    </div>
+                  </motion.button>
+                </>
+              ) : (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate("/login")}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 text-white text-sm font-medium shadow-md"
+                >
+                  Log In
+                </motion.button>
+              )}
+            </div>
         </header>
 
         {/* Page Content */}

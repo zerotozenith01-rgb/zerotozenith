@@ -1,9 +1,31 @@
 import { motion } from "motion/react";
-import { Pill, Mail, Lock, ArrowRight, Github, User } from "lucide-react";
+import { Pill, Mail, Lock, ArrowRight, Github, User, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useState } from "react";
+import { useAuth } from "../AuthContext";
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const { register } = useAuth();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"customer" | "vendor">("customer");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const result = await register(name, email, password, role);
+    setLoading(false);
+    if (result.success) {
+      navigate("/dashboard");
+    } else {
+      setError(result.error || "Registration failed");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-8 relative overflow-hidden">
@@ -47,7 +69,28 @@ export default function SignupPage() {
             <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Create Account</h1>
             <p className="text-slate-500 mb-8">Join us to make informed healthcare decisions.</p>
 
-            <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); navigate("/dashboard"); }}>
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              {error && (
+                <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm">
+                  {error}
+                </div>
+              )}
+
+              {/* Role Toggle */}
+              <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                {(["customer", "vendor"] as const).map((r) => (
+                  <button key={r} type="button"
+                    onClick={() => setRole(r)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      role === r
+                        ? "bg-white text-teal-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {r === "customer" ? "👤 Customer" : "🏪 Vendor / Pharmacist"}
+                  </button>
+                ))}
+              </div>
               {/* Name Input */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">Full Name</label>
@@ -57,6 +100,8 @@ export default function SignupPage() {
                   </div>
                   <input 
                     type="text" 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     className="w-full pl-11 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none text-slate-700 font-medium placeholder:font-normal placeholder:text-slate-400"
                     placeholder="John Doe"
                     required
@@ -73,6 +118,8 @@ export default function SignupPage() {
                   </div>
                   <input 
                     type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-11 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none text-slate-700 font-medium placeholder:font-normal placeholder:text-slate-400"
                     placeholder="name@example.com"
                     required
@@ -89,6 +136,8 @@ export default function SignupPage() {
                   </div>
                   <input 
                     type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="w-full pl-11 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all outline-none text-slate-700 font-medium placeholder:font-normal placeholder:text-slate-400"
                     placeholder="••••••••"
                     required
@@ -101,10 +150,10 @@ export default function SignupPage() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 type="submit"
-                className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-xl font-bold shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 transition-all flex items-center justify-center gap-2 group"
+                disabled={loading}
+                className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-xl font-bold shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 transition-all flex items-center justify-center gap-2 group disabled:opacity-60"
               >
-                Create Account
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                {loading ? (<><Loader2 className="w-5 h-5 animate-spin" /> Creating account...</>) : (<>Create Account <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>)}
               </motion.button>
             </form>
 

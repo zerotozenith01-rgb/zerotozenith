@@ -120,12 +120,20 @@ def search_medicines(query: str) -> list:
         salts = [s["salts"]["salt_name"] for s in comp.data if s.get("salts")]
         salt_str = ", ".join(salts)
 
-        # Check if enrichment is needed
+        # Check if enrichment is needed for basic fields (uses/description)
         needs_enrichment = not med.get("uses") or not med.get("description")
 
         if needs_enrichment:
             enriched = _enrich_and_cache(med["id"], med["brand_name"], salt_str)
             med.update(enriched)
+        else:
+            # DB has uses/description but NOT the extended fields (side_effects, etc.)
+            # Call Gemini directly for those without re-caching
+            gem = enrich_medicine(med["brand_name"], salt_str)
+            if gem:
+                for key in ("side_effects", "dosage_guidance", "safety_warnings", "food_interactions", "storage"):
+                    if not med.get(key) and gem.get(key):
+                        med[key] = gem[key]
 
         results.append({
             "id": med["id"],
@@ -137,6 +145,11 @@ def search_medicines(query: str) -> list:
             "uses": med.get("uses", ""),
             "description": med.get("description", ""),
             "category": med.get("category", "Other"),
+            "side_effects": med.get("side_effects", ""),
+            "dosage_guidance": med.get("dosage_guidance", ""),
+            "safety_warnings": med.get("safety_warnings", ""),
+            "food_interactions": med.get("food_interactions", ""),
+            "storage": med.get("storage", ""),
             "is_verified": med.get("is_verified", False),
             "verification_source": med.get("verification_source", ""),
         })
@@ -200,6 +213,9 @@ def _enrich_and_cache(medicine_id: str, brand_name: str, salt_composition: str) 
                 "category": gem.get("category", "Other"),
                 "side_effects": gem.get("side_effects", "")[:300],
                 "dosage_guidance": gem.get("dosage_guidance", "")[:200],
+                "safety_warnings": gem.get("safety_warnings", "")[:300],
+                "food_interactions": gem.get("food_interactions", "")[:300],
+                "storage": gem.get("storage", "")[:200],
                 "is_verified": False,
                 "verification_source": "Gemini-AI",
             }

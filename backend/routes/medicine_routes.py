@@ -1,16 +1,3 @@
-"""
-medicine_routes.py  (enhanced)
-────────────────────────────────
-Endpoints:
-  GET  /api/medicines/search             — full ilike search + API enrichment
-  GET  /api/medicines/smart-search       — fuzzy autocomplete dropdown
-  GET  /api/medicines/nlp-search         — spaCy NLP natural-language search
-  GET  /api/medicines/<id>/alternatives  — DB + Gemini + OpenFDA alternatives
-  GET  /api/medicines/<id>/detail        — full enriched detail card
-  POST /api/medicines/scan-prescription  — Gemini Vision OCR on uploaded image
-  GET  /api/medicines/verify             — on-demand CDSCO/OpenFDA verification
-"""
-
 import base64
 from flask import Blueprint, request, jsonify
 from services.medicine_service import (
@@ -25,49 +12,45 @@ from services.gemini_service import parse_prescription_image
 
 medicine_bp = Blueprint("medicine", __name__)
 
+# ── SEARCH ENDPOINTS ─────────────────────────────────────────────────────────
 
-# ── /search ──────────────────────────────────────────────────────────────────
-
-@medicine_bp.route("/search")
+@medicine_bp.route("/search", methods=["GET"])
 def search():
     """
-    Standard search. Returns enriched medicine cards including:
-      - uses / diseases treated
-      - salt composition
-      - is_verified status
+    Standard search using brand name or salt.
+    Query params: q (string), category (string)
     """
     q = request.args.get("q", "").strip()
     category = request.args.get("category", "All")
+    
+    if not q:
+        return jsonify({"medicines": []})
+
     medicines = search_medicines(q)
 
     if category and category != "All":
-        medicines = [m for m in medicines if m.get("category", "") == category]
+        medicines = [m for m in medicines if m.get("category") == category]
 
     return jsonify({"medicines": medicines})
 
 
-# ── /smart-search ─────────────────────────────────────────────────────────────
-
-@medicine_bp.route("/smart-search")
+@medicine_bp.route("/smart-search", methods=["GET"])
 def smart_search_route():
     """
-    Fuzzy-match autocomplete suggestions.
-    Query param: q
-    Returns: [{id, brand_name, score}]
+    Fuzzy-match autocomplete suggestions for the search bar dropdown.
     """
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify({"suggestions": []})
+    
     return jsonify({"suggestions": smart_search(q)})
 
 
-# ── /nlp-search ───────────────────────────────────────────────────────────────
-
-@medicine_bp.route("/nlp-search")
+@medicine_bp.route("/nlp-search", methods=["GET"])
 def nlp_search():
     """
-    Natural-language search. spaCy extracts drug name token, then full search.
-    E.g. "I need something for headache" → parsed: "headache" → searches by salt
+    Uses spaCy to extract intent from natural language.
+    Example: "I have a stomach ache" -> search_medicines("stomach ache")
     """
     q = request.args.get("q", "").strip()
     if not q:
@@ -78,30 +61,12 @@ def nlp_search():
     return jsonify({"medicines": medicines, "parsed_query": parsed})
 
 
-# ── /<id>/alternatives ────────────────────────────────────────────────────────
+# ── DETAIL & ALTERNATIVES ───────────────────────────────────────────────────
 
-@medicine_bp.route("/<medicine_id>/alternatives")
-def alternatives(medicine_id):
-    """
-    Returns cheap, composition-verified alternatives.
-    Response includes:
-      - original medicine info
-      - exact_matches (≥95% composition match)
-      - similar_matches (80–94% match)
-      - Each entry has: is_verified, verification_source, savings_percent,
-                        match_percent, composition_match, is_generic
-    """
-    data = get_alternatives(medicine_id)
-    return jsonify(data)
-
-
-# ── /<id>/detail ──────────────────────────────────────────────────────────────
-
-@medicine_bp.route("/<medicine_id>/detail")
+@medicine_bp.route("/<medicine_id>/detail", methods=["GET"])
 def detail(medicine_id):
     """
-    Full enriched detail for one medicine.
-    Used when user clicks a result card for more info.
+    Returns full pharmacological detail card.
     """
     data = get_medicine_detail(medicine_id)
     if not data:
@@ -109,20 +74,29 @@ def detail(medicine_id):
     return jsonify(data)
 
 
-# ── /verify ───────────────────────────────────────────────────────────────────
+@medicine_bp.route("/<medicine_id>/alternatives", methods=["GET"])
+def alternatives(medicine_id):
+    """
+    Fetches composition-matched cheaper alternatives from DB and Gemini.
+    """
+    data = get_alternatives(medicine_id)
+    if not data:
+        return jsonify({"error": "Alternatives could not be processed"}), 404
+    return jsonify(data)
 
-@medicine_bp.route("/verify")
+
+# ── VERIFICATION & REGULATORY ───────────────────────────────────────────────
+
+@medicine_bp.route("/verify", methods=["GET"])
 def verify():
     """
-    On-demand verification of a medicine against CDSCO + OpenFDA.
-    Query params: brand_name, manufacturer (optional)
-    Returns: {verified, approval_info, source, fda_info}
+    Cross-references medicine against CDSCO (India) and OpenFDA.
     """
     brand_name = request.args.get("brand_name", "").strip()
     manufacturer = request.args.get("manufacturer", "").strip()
 
     if not brand_name:
-        return jsonify({"error": "brand_name param required"}), 400
+        return jsonify({"error": "brand_name parameter is required"}), 400
 
     cdsco_result = verify_cdsco(brand_name, manufacturer)
     fda_info = fetch_drug_label(brand_name)
@@ -136,44 +110,69 @@ def verify():
             "indications": fda_info.get("indications"),
             "manufacturer": fda_info.get("manufacturer"),
         },
-        "verified": cdsco_result["verified"] or bool(fda_info.get("brand_name")),
+        "verified": cdsco_result.get("verified", False) or bool(fda_info.get("brand_name")),
     })
 
 
-# ── /scan-prescription ────────────────────────────────────────────────────────
+# ── VISION / OCR SCANNING ───────────────────────────────────────────────────
 
 @medicine_bp.route("/scan-prescription", methods=["POST"])
 def scan_prescription():
     """
-    POST a base64 image (JSON body: {image: "<base64>", mime_type: "image/jpeg"})
-    Returns extracted medicine names + search results for each.
+    Extracts medicine names from a prescription image using Gemini Vision.
+    Supports: multipart/form-data (file upload) or application/json (base64).
     """
-    body = request.json or {}
-    image_b64 = body.get("image", "")
-    mime_type = body.get("mime_type", "image/jpeg")
+    image_data = None
+    mime_type = "image/jpeg"
 
-    if not image_b64:
-        # Try file upload
-        file = request.files.get("file")
-        if file:
-            image_b64 = base64.b64encode(file.read()).decode("utf-8")
-            mime_type = file.content_type or "image/jpeg"
+    # 1. Check for File Upload (e.g., from a FormData object)
+    if 'file' in request.files:
+        file = request.files['file']
+        image_data = file.read()
+        mime_type = file.content_type or "image/jpeg"
+    
+    # 2. Check for Base64 JSON (e.g., from a React Native/Web camera component)
+    else:
+        body = request.json or {}
+        image_b64 = body.get("image", "")
+        if image_b64:
+            # Handle potential header in base64 string
+            if "," in image_b64:
+                image_b64 = image_b64.split(",")[1]
+            image_data = base64.b64decode(image_b64)
+            mime_type = body.get("mime_type", "image/jpeg")
 
-    if not image_b64:
-        return jsonify({"error": "No image provided"}), 400
+    if not image_data:
+        return jsonify({"error": "No image data provided"}), 400
 
-    ocr_result = parse_prescription_image(image_b64, mime_type)
+    # Call the Gemini service with binary data
+    ocr_result = parse_prescription_image(image_data, mime_type)
     medicine_names = ocr_result.get("medicines", [])
 
-    # Search for each extracted medicine name
+    # Fallback: if Gemini returned nothing (quota exceeded), try filename hint
+    if not medicine_names and 'file' in request.files:
+        filename = request.files['file'].filename or ""
+        # Strip extension and clean
+        import re as _re
+        name_hint = _re.sub(r'\.[^.]+$', '', filename)          # remove extension
+        name_hint = _re.sub(r'[_\-\d]+', ' ', name_hint).strip()  # clean separators
+        if name_hint and len(name_hint) > 2:
+            medicine_names = [name_hint]
+
+    # Automatically search for the first few medicines found
     search_results = {}
-    for name in medicine_names[:5]:  # limit to 5 to avoid rate-limit
+    detected_medicines = []
+    for name in medicine_names[:3]:
         results = search_medicines(name)
         if results:
             search_results[name] = results[:3]
+            detected_medicines.append({"name": name, "found": True})
+        else:
+            detected_medicines.append({"name": name, "found": False})
 
     return jsonify({
         "extracted_medicines": medicine_names,
-        "raw_text": ocr_result.get("raw_text", ""),
+        "detected_medicines": detected_medicines,
         "search_results": search_results,
+        "status": "success" if medicine_names else "no_medicines_detected",
     })

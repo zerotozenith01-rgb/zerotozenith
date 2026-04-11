@@ -17,6 +17,10 @@ import {
   Star,
   Sparkles,
   Loader2,
+  AlertTriangle,
+  Utensils,
+  Thermometer,
+  Info,
 } from "lucide-react";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -42,6 +46,12 @@ interface Medicine {
   rating: number;
   review_count: number;
   description: string;
+  uses: string;
+  side_effects: string;
+  dosage_guidance: string;
+  safety_warnings: string;
+  food_interactions: string;
+  storage: string;
 }
 
 interface Alternative {
@@ -141,7 +151,17 @@ export default function SearchMedicine() {
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleUpload(file);
+    }
+    // Reset so same file can be selected again
+    e.target.value = "";
+  };
 
   const debouncedQuery = useDebounce(query, 280);
 
@@ -327,24 +347,31 @@ export default function SearchMedicine() {
   };
 
   // ── Prescription upload ───────────────────────────────────────────────────
-  const handleUpload = async () => {
+  const handleUpload = async (file: File) => {
     setShowUploadModal(false);
     setLoading(true);
     setSearched(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
     try {
-      const res = await fetch(`${API_BASE}/api/medicines/scan-prescription`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/medicines/scan-prescription`, {
+        method: "POST",
+        body: formData,
+      });
       if (!res.ok) {
         console.error("Prescription scan failed:", await res.text());
         return;
       }
       const data = await res.json();
-      if (data.detected_medicines?.length > 0) {
-        const name: string = data.detected_medicines[0].name;
+      if (data.extracted_medicines?.length > 0) {
+        const name: string = data.extracted_medicines[0];
         setQuery(name);
         handleSearch(name, "All");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Upload error:", err);
     } finally {
       setLoading(false);
     }
@@ -459,13 +486,27 @@ export default function SearchMedicine() {
           )}
         </div>
 
+        {/* Hidden file input for prescription scan */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={onFileChange}
+          accept="image/*"
+          className="hidden"
+        />
+
         {/* Action row */}
         <div className="flex items-center gap-2 px-5 pb-5 pt-2 border-t border-gray-100 flex-wrap">
           <motion.button
             type="button"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.removeAttribute("capture");
+                fileInputRef.current.click();
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors text-sm"
           >
             <Upload className="w-4 h-4" />
@@ -476,7 +517,12 @@ export default function SearchMedicine() {
             type="button"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            onClick={handleUpload}
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.setAttribute("capture", "environment");
+                fileInputRef.current.click();
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors text-sm"
           >
             <Camera className="w-4 h-4" />
@@ -653,6 +699,50 @@ export default function SearchMedicine() {
                       </span>
                     </div>
                   </div>
+                  <div className="text-xs text-gray-500 mb-3 space-y-1.5">
+                    {medicine.description && (
+                      <p className="leading-relaxed">
+                        <span className="font-semibold text-gray-700">📋 Description: </span>
+                        {medicine.description}
+                      </p>
+                    )}
+                    {medicine.uses && (
+                      <p className="text-cyan-700">
+                        <span className="font-semibold text-gray-700">💊 Uses: </span>
+                        {medicine.uses}
+                      </p>
+                    )}
+                    {medicine.side_effects && (
+                      <p className="text-amber-700">
+                        <span className="font-semibold text-gray-700">⚠️ Side Effects: </span>
+                        {medicine.side_effects}
+                      </p>
+                    )}
+                    {medicine.dosage_guidance && (
+                      <p>
+                        <span className="font-semibold text-gray-700">📏 Dosage: </span>
+                        {medicine.dosage_guidance}
+                      </p>
+                    )}
+                    {medicine.safety_warnings && (
+                      <p className="text-red-600">
+                        <span className="font-semibold text-gray-700">🛑 Warnings: </span>
+                        {medicine.safety_warnings}
+                      </p>
+                    )}
+                    {medicine.food_interactions && (
+                      <p>
+                        <span className="font-semibold text-gray-700">🍽️ Food: </span>
+                        {medicine.food_interactions}
+                      </p>
+                    )}
+                    {medicine.storage && (
+                      <p>
+                        <span className="font-semibold text-gray-700">🌡️ Storage: </span>
+                        {medicine.storage}
+                      </p>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                     <div>
@@ -691,9 +781,53 @@ export default function SearchMedicine() {
                   Alternatives for{" "}
                   <span className="text-cyan-600">{selectedMedicine.brand_name}</span>
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 mb-2">
                   {selectedMedicine.salt_composition} • {selectedMedicine.strength}
                 </p>
+                <div className="space-y-2 mt-3">
+                  {selectedMedicine.description && (
+                    <p className="text-sm text-gray-600 max-w-2xl leading-relaxed">
+                      <span className="font-semibold text-gray-800">📋 Description: </span>
+                      {selectedMedicine.description}
+                    </p>
+                  )}
+                  {selectedMedicine.uses && (
+                    <p className="text-sm text-cyan-700 max-w-2xl leading-relaxed">
+                      <span className="font-semibold text-gray-800">💊 Primary Uses: </span>
+                      {selectedMedicine.uses}
+                    </p>
+                  )}
+                  {selectedMedicine.side_effects && (
+                    <p className="text-sm text-amber-700 max-w-2xl leading-relaxed">
+                      <span className="font-semibold text-gray-800">⚠️ Side Effects: </span>
+                      {selectedMedicine.side_effects}
+                    </p>
+                  )}
+                  {selectedMedicine.dosage_guidance && (
+                    <p className="text-sm text-gray-600 max-w-2xl leading-relaxed">
+                      <span className="font-semibold text-gray-800">📏 Dosage: </span>
+                      {selectedMedicine.dosage_guidance}
+                    </p>
+                  )}
+                  {selectedMedicine.safety_warnings && (
+                    <p className="text-sm text-red-600 max-w-2xl leading-relaxed">
+                      <span className="font-semibold text-gray-800">🛑 Warnings: </span>
+                      {selectedMedicine.safety_warnings}
+                    </p>
+                  )}
+                  {selectedMedicine.food_interactions && (
+                    <p className="text-sm text-gray-600 max-w-2xl leading-relaxed">
+                      <span className="font-semibold text-gray-800">🍽️ Food Interactions: </span>
+                      {selectedMedicine.food_interactions}
+                    </p>
+                  )}
+                  {selectedMedicine.storage && (
+                    <p className="text-sm text-gray-600 max-w-2xl leading-relaxed">
+                      <span className="font-semibold text-gray-800">🌡️ Storage: </span>
+                      {selectedMedicine.storage}
+                    </p>
+                  )}
+                </div>
               </div>
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -888,7 +1022,7 @@ export default function SearchMedicine() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={handleUpload}
+                  onClick={() => fileInputRef.current?.click()}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-cyan-500 text-white text-sm shadow-md"
                 >
                   Process
